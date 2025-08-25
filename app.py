@@ -92,10 +92,6 @@ with st.sidebar:
         HE_HB = st.number_input("혈색소 (g/dL)", min_value=5.0, max_value=25.0, value=14.0, step=0.1)
         HE_BUN = st.number_input("혈중 요소질소 (BUN, mg/dL)", min_value=1.0, max_value=100.0, value=15.0, step=0.1)
 
-    with st.expander("소변 검사 결과"):
-        HE_Upro = st.selectbox("요단백 검사", options=[1, 2, 3, 4, 5], index=0, format_func=lambda x: f"{x}단계", help="1(-), 2(+-), 3(+1), 4(+2), 5(≥+3)")
-        HE_Ubld = st.selectbox("요잠혈 검사", options=[1, 2, 3, 4, 5], index=0, format_func=lambda x: f"{x}단계", help="1(-), 2(+-), 3(+1), 4(+2), 5(≥+3)")
-
     with st.expander("병력 및 가족력"):
         DI1_dg = st.selectbox("고혈압 의사진단 여부", options=[1, 0], index=1, format_func=lambda x: "예" if x==1 else "아니오")
         DE1_dg = st.selectbox("이상지질혈증 의사진단 여부", options=[1, 0], index=1, format_func=lambda x: "예" if x==1 else "아니오")
@@ -231,3 +227,4 @@ with tab2:
             '소변으로 배출되는 알부민의 양을 측정하며, 신장 손상의 중요한 조기 지표입니다.'
         ]
     }))
+
