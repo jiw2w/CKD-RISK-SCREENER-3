@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 st.set_page_config(
     page_title="만성콩팥병 위험 예측",
     layout="wide",
-    page_icon="🩺",
+    page_icon="�",
     initial_sidebar_state="expanded"
 )
 
@@ -45,7 +45,6 @@ class InferenceBundle:
 def load_inference_bundle():
     """캐시를 이용해 모델과 추론 정보를 한번만 로드합니다."""
     try:
-        # 최종 보정된 모델이 포함된 번들을 로드합니다.
         with open("final_inference_bundle.pkl", "rb") as f:
             bundle = pickle.load(f)
         return bundle.model, bundle
@@ -57,6 +56,21 @@ def load_inference_bundle():
         return None, None
 
 model, bundle = load_inference_bundle()
+
+# --- ★★★ 한글 변수명 매핑 사전 ★★★ ---
+feature_names_kr = {
+    'age': '나이', 'sex': '성별', 'HE_BMI': 'BMI', 'HE_wc': '허리 둘레',
+    'HE_sbp': '수축기 혈압', 'HE_dbp': '이완기 혈압', 'HE_glu': '공복 혈당',
+    'HE_HbA1c': '당화혈색소', 'HE_chol': '총 콜레스테롤', 'HE_TG': '중성지방',
+    'HE_HDL_st2': 'HDL 콜레스테롤', 'HE_ast': 'AST (간수치)', 'HE_alt': 'ALT (간수치)',
+    'HE_HB': '혈색소', 'HE_BUN': '혈중 요소질소', 'DI1_dg': '고혈압 의사진단',
+    'DE1_dg': '이상지질혈증 의사진단', 'DI2_dg': '뇌졸중 의사진단',
+    'sm_presnt': '현재 흡연 여부', 'HE_HPfh1': '고혈압 가족력(부)',
+    'HE_HPfh2': '고혈압 가족력(모)', 'HE_DMfh1': '당뇨병 가족력(부)',
+    'HE_DMfh2': '당뇨병 가족력(모)', 'BUN_Creatinine_Ratio': 'BUN/크레아티닌 비율',
+    'Pulse_Pressure': '맥압', 'TG_to_HDL': '중성지방/HDL 비율',
+    'age_sq': '나이 (제곱)', 'HE_BMI_sq': 'BMI (제곱)', 'Intercept': '기본 점수'
+}
 
 # ============================================================
 # 2. 화면 구성
@@ -165,21 +179,16 @@ if model and bundle:
     st.subheader("모델 예측 근거 확인 (EBM 폭포 차트)")
 
     try:
-        # --- ★★★ 오류 수정: 모델 타입에 따라 EBM 객체를 다르게 추출 ★★★ ---
         base_model_for_explain = None
-        # CalibratedClassifierCV로 감싸진 경우, 내부 모델을 먼저 추출
         if hasattr(model, 'estimator'):
             uncalibrated_model = model.estimator
         else:
             uncalibrated_model = model
         
-        # 내부 모델이 Stacking인지, 아니면 EBM 자체인지 확인
         if isinstance(uncalibrated_model, StackingClassifier):
-            # Stacking 모델이면 내부의 EBM을 이름으로 찾음
             if 'ebm' in uncalibrated_model.named_estimators_:
                 base_model_for_explain = uncalibrated_model.named_estimators_['ebm']
         elif isinstance(uncalibrated_model, ExplainableBoostingClassifier):
-            # 모델 자체가 EBM인 경우
             base_model_for_explain = uncalibrated_model
         
         if base_model_for_explain:
@@ -189,16 +198,38 @@ if model and bundle:
             df_exp = pd.DataFrame({
                 'Feature': explanation_data['names'] + ['Intercept'],
                 'Contribution': list(explanation_data['scores']) + [explanation_data['extra']['scores'][0]]
-            }).sort_values('Contribution', key=abs, ascending=False)
+            })
+            
+            # --- ★★★ 수정된 부분 시작 ★★★ ---
+            # 한글 변수명 추가
+            df_exp['Description'] = df_exp['Feature'].map(feature_names_kr).fillna(df_exp['Feature'])
+            
+            # 기여도에 따른 색상 정의
+            colors = ['green' if c < 0 else 'red' for c in df_exp['Contribution']]
 
             fig_waterfall = go.Figure(go.Waterfall(
                 name = "Contribution", orientation = "h",
                 measure = ["relative"] * (len(df_exp) - 1) + ["total"],
-                y = df_exp['Feature'], x = df_exp['Contribution'],
+                y = df_exp['Description'], # 한글 변수명으로 y축 설정
+                x = df_exp['Contribution'],
                 connector = {"line":{"color":"rgb(63, 63, 63)"}},
+                # 막대 색상 설정
+                increasing = {"marker":{"color":"red"}},
+                decreasing = {"marker":{"color":"green"}},
+                totals = {"marker":{"color":"#007bff"}}
             ))
-            fig_waterfall.update_layout(title="각 변수가 예측에 미친 영향", yaxis_title="변수", height=500)
+            fig_waterfall.update_layout(
+                title="각 변수가 예측에 미친 영향 (빨강: 위험도 증가, 초록: 위험도 감소)",
+                yaxis_title="변수",
+                height=600,
+                yaxis=dict(autorange="reversed") # 중요도 높은 변수가 위로 오도록
+            )
             st.plotly_chart(fig_waterfall, use_container_width=True)
+
+            # 상세 기여도 표 추가
+            with st.expander("상세 기여도 수치 보기"):
+                st.dataframe(df_exp[['Description', 'Contribution']].rename(columns={'Description':'변수명', 'Contribution':'기여도 점수'}).round(4))
+            # --- ★★★ 수정된 부분 끝 ★★★ ---
         else:
             st.warning("현재 저장된 모델에서는 EBM 설명을 추출할 수 없습니다.")
 
@@ -227,5 +258,4 @@ with tab2:
             '소변으로 배출되는 알부민의 양을 측정하며, 신장 손상의 중요한 조기 지표입니다.'
         ]
     }))
-
-
+�
